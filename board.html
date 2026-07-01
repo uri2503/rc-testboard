@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Testlauf Board</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --bg:#14161a; --panel:#1c1f26; --panel-2:#21252d; --line:#2c313b;
+    --text:#e8e9ec; --text-dim:#8b909c; --accent:#4f8cff;
+    --ok:#33c17a; --bug:#ef5350; --idea:#f5a623; --frage:#9c7cf5;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--text); padding-bottom:100px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  header{
+    position:sticky; top:0; z-index:10;
+    background:rgba(20,22,26,0.95); backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--line); padding:12px 16px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .back-btn{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:8px 10px; font-size:14px; cursor:pointer; flex-shrink:0;
+  }
+  .back-btn:active{ transform:scale(0.94); }
+  .head-title{ flex:1; min-width:0; }
+  .head-title input{
+    background:transparent; border:none; color:var(--text); font-size:15px;
+    font-weight:700; width:100%; padding:2px 0; border-bottom:1px dashed transparent;
+  }
+  .head-title input:focus{ outline:none; border-bottom:1px dashed var(--accent); }
+  .head-title .sub{ font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .save-dot{ opacity:0; transition:opacity .3s ease; color:var(--ok); }
+
+  main{ padding:14px; max-width:720px; margin:0 auto; }
+
+  .empty{ text-align:center; padding:60px 20px; color:var(--text-dim); }
+  .empty .icon{ font-size:34px; margin-bottom:10px; }
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    margin-bottom:14px; overflow:hidden;
+  }
+  .card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 12px; border-bottom:1px solid var(--line); gap:8px;
+  }
+  .card-head input.title{
+    background:transparent; border:none; color:var(--text); font-size:14px;
+    font-weight:700; flex:1; padding:4px 2px; border-bottom:1px dashed transparent;
+  }
+  .card-head input.title:focus{ outline:none; border-bottom:1px dashed var(--accent); }
+  .del-btn{ background:none; border:none; color:var(--text-dim); font-size:16px; padding:4px 8px; }
+  .del-btn:active{ color:var(--bug); }
+
+  .drop{
+    position:relative; min-height:160px; background:var(--panel-2);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--text-dim); font-size:13px; border-bottom:1px solid var(--line);
+    text-align:center; padding:14px; cursor:pointer;
+  }
+  .drop.has-img{ padding:0; }
+  .drop img{ width:100%; display:block; max-height:420px; object-fit:contain; background:#0c0d10; }
+  .drop.drag-over{ outline:2px dashed var(--accent); outline-offset:-6px; }
+  .drop.uploading{ opacity:0.5; }
+  .drop input[type=file]{ display:none; }
+  .drop small{ display:block; margin-top:4px; color:#5a5f6b; }
+
+  .body{ padding:12px; }
+  .status-row{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .status-btn{
+    flex:1; min-width:70px; padding:8px 6px; border-radius:8px; font-size:12px;
+    background:var(--panel-2); color:var(--text-dim); border:1px solid var(--line); text-align:center;
+  }
+  .status-btn.active[data-status="ok"]{ background:rgba(51,193,122,0.15); color:var(--ok); border-color:var(--ok); }
+  .status-btn.active[data-status="bug"]{ background:rgba(239,83,80,0.15); color:var(--bug); border-color:var(--bug); }
+  .status-btn.active[data-status="idea"]{ background:rgba(245,166,35,0.15); color:var(--idea); border-color:var(--idea); }
+  .status-btn.active[data-status="frage"]{ background:rgba(156,124,245,0.15); color:var(--frage); border-color:var(--frage); }
+
+  textarea.note{
+    width:100%; min-height:64px; resize:vertical; background:var(--panel-2);
+    border:1px solid var(--line); border-radius:8px; color:var(--text);
+    font-family:inherit; font-size:13.5px; padding:10px;
+  }
+  textarea.note:focus{ outline:none; border-color:var(--accent); }
+  textarea.note::placeholder{ color:#5a5f6b; }
+
+  .add-card{
+    border:1.5px dashed var(--line); border-radius:14px; padding:20px;
+    text-align:center; color:var(--text-dim); font-size:14px; font-weight:600; margin-bottom:14px;
+  }
+  .add-card:active{ border-color:var(--accent); color:var(--accent); }
+
+  footer{
+    position:fixed; bottom:0; left:0; right:0;
+    background:rgba(20,22,26,0.97); backdrop-filter:blur(8px);
+    border-top:1px solid var(--line); padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    display:flex; gap:8px; justify-content:center;
+  }
+  footer button{
+    flex:1; max-width:220px; border:none; border-radius:8px; font-size:13px;
+    font-weight:600; padding:11px 13px; cursor:pointer;
+  }
+  footer button:active{ transform:scale(0.96); }
+  .btn-primary{ background:var(--accent); color:#fff; }
+
+  .toast{
+    position:fixed; top:66px; left:50%; transform:translateX(-50%);
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    padding:9px 16px; border-radius:20px; font-size:13px; z-index:50;
+    opacity:0; pointer-events:none; transition:opacity .25s ease;
+  }
+  .toast.show{ opacity:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="back-btn" id="backBtn">←</button>
+  <div class="head-title">
+    <input type="text" id="runNameInput" placeholder="Name des Testlaufs">
+    <div class="sub"><span id="stepCount">0 Schritte</span> <span class="save-dot" id="saveDot">● gespeichert</span></div>
+  </div>
+</header>
+
+<main>
+  <div id="emptyState" class="empty" style="display:none;">
+    <div class="icon">🧪</div>
+    <div>Noch keine Schritte. Leg unten den ersten Schritt an.</div>
+  </div>
+  <div id="cardsContainer"></div>
+  <div class="add-card" id="addCardBtn">+ Schritt hinzufügen</div>
+</main>
+
+<footer>
+  <button class="btn-primary" id="exportBtn">⬇ Export als ZIP</button>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://ysqzdqazcgyuzdorauiq.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_v4kXJa0y-2EHsCFPqBFHfg_QvzKLnt2';
+const BUCKET = 'testboard-screenshots';
+
+const params = new URLSearchParams(window.location.search);
+const runId = params.get('run');
+
+if(!runId){
+  window.location.href = 'index.html';
+}
+
+function sbHeaders(extra){
+  return Object.assign({
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Content-Type': 'application/json'
+  }, extra || {});
+}
+
+let steps = [];
+let runName = '';
+let saveTimer = null;
+
+const cardsContainer = document.getElementById('cardsContainer');
+const emptyState = document.getElementById('emptyState');
+const stepCountEl = document.getElementById('stepCount');
+const saveDot = document.getElementById('saveDot');
+const toastEl = document.getElementById('toast');
+const runNameInput = document.getElementById('runNameInput');
+
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=> toastEl.classList.remove('show'), 1800);
+}
+
+function flashSaved(){
+  saveDot.style.opacity = '1';
+  clearTimeout(saveDot._t);
+  saveDot._t = setTimeout(()=> saveDot.style.opacity = '0', 900);
+}
+
+document.getElementById('backBtn').addEventListener('click', () => {
+  window.location.href = 'index.html';
+});
+
+// --- Laden ---
+async function loadRun(){
+  try{
+    const runRes = await fetch(SUPABASE_URL + '/rest/v1/testboard_runs?id=eq.' + runId + '&select=*', {
+      headers: sbHeaders()
+    });
+    const runs = await runRes.json();
+    if(!runs.length){
+      showToast('Testlauf nicht gefunden');
+      setTimeout(()=> window.location.href = 'index.html', 1200);
+      return;
+    }
+    runName = runs[0].name;
+    runNameInput.value = runName;
+
+    const stepsRes = await fetch(SUPABASE_URL + '/rest/v1/testboard_steps?run_id=eq.' + runId + '&select=*&order=position.asc', {
+      headers: sbHeaders()
+    });
+    steps = await stepsRes.json();
+    render();
+  } catch(err){
+    console.error(err);
+    showToast('Fehler beim Laden');
+  }
+}
+
+// --- Speichern (debounced) ---
+function scheduleSaveStep(step){
+  clearTimeout(step._saveTimer);
+  step._saveTimer = setTimeout(() => saveStep(step), 600);
+}
+
+async function saveStep(step){
+  try{
+    await fetch(SUPABASE_URL + '/rest/v1/testboard_steps?id=eq.' + step.id, {
+      method: 'PATCH',
+      headers: sbHeaders(),
+      body: JSON.stringify({
+        title: step.title,
+        status: step.status,
+        note: step.note,
+        position: step.position,
+        image_path: step.image_path,
+        updated_at: new Date().toISOString()
+      })
+    });
+    await touchRun();
+    flashSaved();
+  } catch(err){
+    console.error('Speichern fehlgeschlagen', err);
+  }
+}
+
+async function touchRun(){
+  try{
+    await fetch(SUPABASE_URL + '/rest/v1/testboard_runs?id=eq.' + runId, {
+      method: 'PATCH',
+      headers: sbHeaders(),
+      body: JSON.stringify({ updated_at: new Date().toISOString() })
+    });
+  } catch(err){}
+}
+
+let runNameTimer = null;
+runNameInput.addEventListener('input', () => {
+  runName = runNameInput.value;
+  clearTimeout(runNameTimer);
+  runNameTimer = setTimeout(async () => {
+    try{
+      await fetch(SUPABASE_URL + '/rest/v1/testboard_runs?id=eq.' + runId, {
+        method: 'PATCH',
+        headers: sbHeaders(),
+        body: JSON.stringify({ name: runName, updated_at: new Date().toISOString() })
+      });
+      flashSaved();
+    } catch(err){}
+  }, 600);
+});
+
+// --- Schritte verwalten ---
+async function addStep(){
+  const newStep = {
+    run_id: runId,
+    position: steps.length,
+    title: 'Schritt ' + (steps.length + 1),
+    status: null,
+    note: '',
+    image_path: null
+  };
+  try{
+    const res = await fetch(SUPABASE_URL + '/rest/v1/testboard_steps', {
+      method: 'POST',
+      headers: sbHeaders({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify(newStep)
+    });
+    const data = await res.json();
+    steps.push(data[0]);
+    render();
+    flashSaved();
+  } catch(err){
+    showToast('Fehler beim Anlegen');
+  }
+}
+
+async function removeStep(id){
+  const step = steps.find(s => s.id === id);
+  steps = steps.filter(s => s.id !== id);
+  render();
+  try{
+    await fetch(SUPABASE_URL + '/rest/v1/testboard_steps?id=eq.' + id, {
+      method: 'DELETE',
+      headers: sbHeaders()
+    });
+    if(step && step.image_path){
+      await fetch(SUPABASE_URL + '/storage/v1/object/' + BUCKET + '/' + step.image_path, {
+        method: 'DELETE',
+        headers: sbHeaders()
+      });
+    }
+  } catch(err){
+    console.error(err);
+  }
+}
+
+function updateStep(id, patch){
+  const s = steps.find(s => s.id === id);
+  if(s){
+    Object.assign(s, patch);
+    scheduleSaveStep(s);
+  }
+}
+
+// --- Bild-Upload zu Supabase Storage ---
+function compressImage(file, cb){
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const img = new Image();
+    img.onload = function(){
+      const maxW = 1400;
+      let w = img.width, h = img.height;
+      if(w > maxW){ h = Math.round(h * (maxW / w)); w = maxW; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => cb(blob), 'image/jpeg', 0.72);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleFile(id, file, dropEl){
+  if(!file || !file.type.startsWith('image/')) return;
+  dropEl.classList.add('uploading');
+  compressImage(file, async (blob) => {
+    try{
+      const step = steps.find(s => s.id === id);
+      const path = runId + '/' + id + '-' + Date.now() + '.jpg';
+
+      // Altes Bild löschen falls vorhanden
+      if(step.image_path){
+        await fetch(SUPABASE_URL + '/storage/v1/object/' + BUCKET + '/' + step.image_path, {
+          method: 'DELETE', headers: sbHeaders()
+        });
+      }
+
+      const uploadRes = await fetch(SUPABASE_URL + '/storage/v1/object/' + BUCKET + '/' + path, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'image/jpeg'
+        },
+        body: blob
+      });
+      if(!uploadRes.ok) throw new Error('Upload fehlgeschlagen: ' + uploadRes.status);
+
+      updateStep(id, { image_path: path });
+      render();
+      flashSaved();
+    } catch(err){
+      console.error(err);
+      showToast('Bild-Upload fehlgeschlagen');
+      dropEl.classList.remove('uploading');
+    }
+  });
+}
+
+function imgUrl(path){
+  return SUPABASE_URL + '/storage/v1/object/public/' + BUCKET + '/' + path;
+}
+
+// --- Rendern ---
+function render(){
+  cardsContainer.innerHTML = '';
+  emptyState.style.display = steps.length ? 'none' : 'block';
+  stepCountEl.textContent = steps.length + (steps.length === 1 ? ' Schritt' : ' Schritte');
+
+  steps.forEach((s) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+
+    const head = document.createElement('div');
+    head.className = 'card-head';
+    const titleInput = document.createElement('input');
+    titleInput.className = 'title';
+    titleInput.value = s.title;
+    titleInput.addEventListener('input', e => updateStep(s.id, { title: e.target.value }));
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del-btn';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', () => removeStep(s.id));
+    head.appendChild(titleInput);
+    head.appendChild(delBtn);
+
+    const drop = document.createElement('div');
+    drop.className = 'drop' + (s.image_path ? ' has-img' : '');
+    if(s.image_path){
+      const img = document.createElement('img');
+      img.src = imgUrl(s.image_path);
+      drop.appendChild(img);
+    } else {
+      drop.innerHTML = '📷 Screenshot einfügen oder klicken<small>Drag & Drop, Datei wählen, oder Strg+V nach Klick</small>';
+    }
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.addEventListener('change', e => {
+      if(e.target.files[0]) handleFile(s.id, e.target.files[0], drop);
+    });
+    drop.appendChild(fileInput);
+
+    drop.addEventListener('click', (e) => {
+      if(e.target.tagName !== 'IMG'){ fileInput.click(); }
+      drop.setAttribute('tabindex', '0');
+      drop.focus();
+    });
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('drag-over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('drag-over'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if(file) handleFile(s.id, file, drop);
+    });
+    drop.addEventListener('paste', e => {
+      const items = e.clipboardData.items;
+      for(let item of items){
+        if(item.type.startsWith('image/')){
+          handleFile(s.id, item.getAsFile(), drop);
+          break;
+        }
+      }
+    });
+
+    const body = document.createElement('div');
+    body.className = 'body';
+
+    const statusRow = document.createElement('div');
+    statusRow.className = 'status-row';
+    const statuses = [
+      {key:'ok', label:'✅ OK'},
+      {key:'bug', label:'🐛 Bug'},
+      {key:'idea', label:'💡 Idee'},
+      {key:'frage', label:'❓ Frage'}
+    ];
+    statuses.forEach(st => {
+      const btn = document.createElement('div');
+      btn.className = 'status-btn' + (s.status === st.key ? ' active' : '');
+      btn.setAttribute('data-status', st.key);
+      btn.textContent = st.label;
+      btn.addEventListener('click', () => {
+        updateStep(s.id, { status: s.status === st.key ? null : st.key });
+        render();
+      });
+      statusRow.appendChild(btn);
+    });
+
+    const note = document.createElement('textarea');
+    note.className = 'note';
+    note.placeholder = 'Anmerkung, Bug-Beschreibung, was soll passieren vs. was passiert...';
+    note.value = s.note || '';
+    note.addEventListener('input', e => updateStep(s.id, { note: e.target.value }));
+
+    body.appendChild(statusRow);
+    body.appendChild(note);
+
+    card.appendChild(head);
+    card.appendChild(drop);
+    card.appendChild(body);
+    cardsContainer.appendChild(card);
+  });
+}
+
+document.getElementById('addCardBtn').addEventListener('click', addStep);
+
+// --- Export als ZIP ---
+const statusLabelMap = { ok:'✅ OK', bug:'🐛 Bug', idea:'💡 Idee', frage:'❓ Frage', null:'— offen' };
+
+document.getElementById('exportBtn').addEventListener('click', async () => {
+  if(steps.length === 0){ showToast('Keine Schritte zum Exportieren'); return; }
+  const exportBtn = document.getElementById('exportBtn');
+  exportBtn.textContent = 'Exportiere...';
+  exportBtn.disabled = true;
+
+  try{
+    const zip = new JSZip();
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0,16).replace('T', '_').replace(':','-');
+
+    let md = '# ' + runName + '\n\n';
+    md += 'Exportiert: ' + dateStr + '\n\n';
+    md += steps.length + ' Schritte\n\n---\n\n';
+
+    for(let idx = 0; idx < steps.length; idx++){
+      const s = steps[idx];
+      const n = idx + 1;
+      md += '## ' + n + '. ' + s.title + '\n\n';
+      md += '**Status:** ' + (statusLabelMap[s.status] || '— offen') + '\n\n';
+      if(s.note && s.note.trim()){
+        md += '**Notiz:** ' + s.note.trim() + '\n\n';
+      }
+      if(s.image_path){
+        const fname = String(n).padStart(2,'0') + '-' + s.title.replace(/[^a-z0-9äöüß\-_]/gi,'_') + '.jpg';
+        md += '![' + s.title + '](./bilder/' + fname + ')\n\n';
+        try{
+          const imgRes = await fetch(imgUrl(s.image_path));
+          const blob = await imgRes.blob();
+          zip.folder('bilder').file(fname, blob);
+        } catch(err){ console.error('Bild-Export fehlgeschlagen für', s.title, err); }
+      } else {
+        md += '_(kein Screenshot)_\n\n';
+      }
+      md += '---\n\n';
+    }
+
+    zip.file('testlauf.md', md);
+    const blob = await zip.generateAsync({type:'blob'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = (runName || 'testlauf').replace(/[^a-z0-9äöüß\-_]/gi,'_') + '_' + dateStr + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('ZIP exportiert ✓');
+  } catch(err){
+    console.error(err);
+    showToast('Fehler beim Export');
+  } finally {
+    exportBtn.textContent = '⬇ Export als ZIP';
+    exportBtn.disabled = false;
+  }
+});
+
+loadRun();
+</script>
+</body>
+</html>
